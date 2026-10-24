@@ -2,7 +2,10 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
+
+DA_Error DA_LastError = DA_SUCCESS;
 
 static bool DA_FindNextPower2(const size_t x, size_t* result) {
     size_t currentValue = 1;
@@ -33,7 +36,7 @@ int DA_CompareIntsD(const void* a, const void* b) {
     return -DA_CompareIntsA(a, b);
 }
 
-bool DA_InitI(IntArr** array, const size_t initialSize) {
+bool DA_InitArray(IntArr** array, const size_t initialSize) {
     if (array == NULL) {
         return false;
     }

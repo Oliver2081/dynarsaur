@@ -5,14 +5,25 @@
 #include <stdbool.h>
 
 
+typedef enum DA_Error {
+    DA_SUCCESS = 0,
+    DA_ALLOCATION_ERROR,
+    DA_INDEX_ERROR,
+} DA_Error;
+
+typedef enum DA_ArrayType {
+    DA_IntArray,
+} DA_ArrayType;
+
 typedef struct IntArr {
     size_t size;
     size_t capacity;
     int* data;
 } IntArr;
 
+extern DA_Error DA_LastError;
 
-bool DA_InitI(IntArr** array, size_t initialSize);
+bool DA_InitArray(IntArr** array, size_t initialSize);
 bool DA_DestroyI(IntArr** array);
 bool DA_ResizeI(IntArr* array, size_t newSize);
 
