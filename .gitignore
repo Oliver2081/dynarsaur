@@ -54,6 +54,10 @@ dkms.conf
 # debug information files
 *.dwo
 
-#CLion
+# CLion
 .idea/
 cmake-build-*/
+
+# VS Code
+.vscode/
+build/

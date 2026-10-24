@@ -2,7 +2,10 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
+
+DA_Error DA_LastError = DA_NO_ERROR;
 
 static bool DA_FindNextPower2(const size_t x, size_t* result) {
     size_t currentValue = 1;
@@ -22,48 +25,41 @@ static bool DA_FindNextPower2(const size_t x, size_t* result) {
     return true;
 }
 
-int DA_CompareIntsA(const void* a, const void* b) {
-    const int x = *(const int*)a;
-    const int y = *(const int*)b;
-
-    return (x > y) - (y > x);
-}
-
-int DA_CompareIntsD(const void* a, const void* b) {
-    return -DA_CompareIntsA(a, b);
-}
-
-bool DA_InitI(IntArr** array, const size_t initialSize) {
+bool DA_InitArray(DA_Array** array, const size_t elementSize, const size_t elementAmount) {
     if (array == NULL) {
         return false;
     }
 
-    *array = malloc(sizeof(IntArr));
+    *array = malloc(sizeof(DA_Array));
     if (*array == NULL) {
         return false;
     }
 
-    IntArr* arr = *array;
+    DA_Array* arr = *array;
 
     // Set initial capacity and store in array->capacity
-    if (!DA_FindNextPower2(initialSize, &arr->capacity)) {
+    if (!DA_FindNextPower2(elementAmount, &arr->capacity)) {
         return false;
     }
 
-    arr->data = malloc(arr->capacity * sizeof(int));
+    arr->data = malloc(arr->capacity * elementSize);
     if (arr->data == NULL) {
         free(*array);
         *array = NULL;
+        DA_LastError = DA_ALLOCATION_ERROR;
         return false;
     }
 
-    arr->size = initialSize;
+    arr->elementSize = elementSize;
+    arr->size = elementAmount;
+
+    DA_LastError = DA_NO_ERROR;
     return true;
 }
 
-bool DA_DestroyI(IntArr** array) {
+bool DA_DestroyArray(DA_Array** array) {
     if (array != NULL && *array != NULL) {
-        IntArr* arr = *array;
+        DA_Array* arr = *array;
 
         if (arr->data != NULL) {
             free(arr->data);
@@ -78,7 +74,7 @@ bool DA_DestroyI(IntArr** array) {
 }
 
 
-bool DA_ResizeI(IntArr* array, const size_t newSize) {
+bool DA_Resize(DA_Array* array, const size_t newSize) {
 
     if (newSize > array->capacity) {
         size_t newCapacity;
@@ -92,7 +88,7 @@ bool DA_ResizeI(IntArr* array, const size_t newSize) {
             return false;
         }
 
-        newPtr = realloc(array->data, (newCapacity) * sizeof(int));
+        newPtr = realloc(array->data, newCapacity * array->elementSize);
 
         if (newPtr == NULL) {
             return false;
@@ -100,7 +96,6 @@ bool DA_ResizeI(IntArr* array, const size_t newSize) {
 
         array->data = newPtr;
         array->capacity = newCapacity;
-
     }
 
     else if (newSize <= array->capacity / 2) {
@@ -116,7 +111,7 @@ bool DA_ResizeI(IntArr* array, const size_t newSize) {
             return false;
         }
 
-        newPtr = realloc(array->data, newCapacity * sizeof(int));
+        newPtr = realloc(array->data, newCapacity * array->elementSize);
 
         if (newPtr == NULL) {
             return false;
@@ -130,58 +125,94 @@ bool DA_ResizeI(IntArr* array, const size_t newSize) {
     return true;
 }
 
-bool DA_AppendI(IntArr* array, const int value) {
-    if (!DA_ResizeI(array, array->size + 1)) {
+/* Appending */
+bool DA_Append(DA_Array* array, const void* value) {
+    if (!DA_Resize(array, array->size + 1)) {
         return false;
     }
 
-    array->data[array->size - 1] = value;
-    return true;
-}
+    size_t offset = (array->size - 1) * array->elementSize;
 
-bool DA_PopI(IntArr* array, const size_t index) {
-     if (index >= array->size) {
-        return false;
-     }
-
-    for (size_t idx = index; idx < (array->size - 1); idx += 1) {
-        array->data[idx] = array->data[idx + 1];
-    }
-
-    DA_ResizeI(array, array->size - 1);
+    memcpy((char*)array->data + offset, value, array->elementSize);
 
     return true;
 }
 
-bool DA_InsertI(IntArr* array, const int value, const size_t index) {
+bool DA_AppendI(DA_Array* array, const int value) {return DA_Append(array, &value);}
+bool DA_AppendF(DA_Array* array, const float value) {return DA_Append(array, &value);}
+bool DA_AppendD(DA_Array* array, const double value) {return DA_Append(array, &value);}
+bool DA_AppendC(DA_Array* array, const char value) {return DA_Append(array, &value);}
+
+/* Popping */
+bool DA_Pop(DA_Array* array, const size_t index) {
+    if (index >= array->size) {
+        DA_LastError = DA_INDEX_ERROR;
+        return false;
+    }
+
+    char* dest = (char*)array->data + (array->elementSize * index);
+    char* src = (char*)array->data + (array->elementSize * (index + 1));
+    size_t byteAmount = (array->size - index - 1) * array->elementSize;
+
+    memmove(dest, src, byteAmount);
+
+    if (!DA_Resize(array, array->size - 1)) {
+        return false;
+    }
+    
+    return true;
+}
+
+/* Inserting */
+bool DA_Insert(DA_Array* array, const void* value, const size_t index) {
     if (index > array->size || array->size == SIZE_MAX) {
         return false;
     }
 
-    if (!DA_ResizeI(array, array->size + 1)) {
+    size_t oldSize = array->size;
+    void* tempValue = malloc(array->elementSize);
+
+    if (tempValue == NULL) {
         return false;
     }
 
-    for (size_t idx = (array->size - 1); idx > index; idx--) {
-        array->data[idx] = array->data[idx - 1];
+    memcpy(tempValue, value, array->elementSize);
+
+    if (!DA_Resize(array, array->size + 1)) {
+        free(tempValue);
+        return false;
     }
 
-    array->data[index] = value;
+    char* dest = (char*)array->data + (array->elementSize * index);
+    char* src = (char*)array->data + (array->elementSize * (index + 1));
+    size_t byteAmount = (oldSize - index) * array->elementSize;
+
+    memmove(src, dest, byteAmount);
+    memcpy(dest, tempValue, array->elementSize);
+
+    free(tempValue);
+    return true;
+}
+
+bool DA_Sort(DA_Array* array, DA_CompareFunc compare) {
+    if (array == NULL || compare == NULL) {
+        return false;
+    }
+
+    if (array->size < 2) {
+        return true;
+    }
+
+    if (array->data == NULL || array->elementSize == 0) {
+        return false;
+    }
+
+    qsort(array->data, array->size, array->elementSize, compare);
 
     return true;
 }
 
-bool DA_SortAscendingI(IntArr* array) {
-    qsort(array->data, array->size, sizeof(int), DA_CompareIntsA);
-    return true;
-}
-
-bool DA_SortDescendingI(IntArr* array) {
-    qsort(array->data, array->size, sizeof(int), DA_CompareIntsD);
-    return true;
-}
-
-bool DA_FindI(IntArr* array, const int value, size_t* index) {
+bool DA_Find(IntArr* array, const int value, size_t* index) {
     for (size_t idx = 0; idx < array->size; idx++) {
         if (array->data[idx] == value) {
             *index = idx;
